@@ -1,0 +1,11 @@
+[project]
+name = "agents"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "dotenv>=0.9.9",
+    "openai>=3.14.1",
+    "tavily>=1.1.0",
+    "typing>=3.10.0.0",
+]
