@@ -1,18 +1,35 @@
 # core/types.py
+from enum import StrEnum
+
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Literal
 import uuid
 
+class MessageRole(StrEnum):
+    System = "system"
+    User = "user"
+    Assistant = "assistant"
+    Tool = "tool"
+
+class StopReason(StrEnum):
+    Stop = "stop"          # 正常结束（这就是最终答案）
+    ToolUse = "tool_use"   # 模型请求调用工具
+    Length = "length"      # 被输出token上限截断
+    Error = "error"        # 模型侧/网络侧错误
+    Aborted = "aborted"    # 被取消（初期先定义，可不实现触发路径）
 
 class ToolCallFunction(BaseModel):
-    """工具调用内的function结构体，对应LLM返回function"""
+    """工具调用内的function结构体，LLM 输出的 function 调用信息"""
     name: str
     # default_factory=dict：每次新建实例都会生成全新空字典，避免共享引用问题
     arguments: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ToolCall(BaseModel):
-    """单次工具调用对象，OpenAI格式对齐"""
+    """
+    一次完整的工具调用请求，OpenAI格式对齐
+    LLM 输出 → 解析成ToolCall对象 → Agent 拿到后执行工具。
+    """
     # lambda：每次new对象自动生成一个唯一的id
     id: str = Field(default_factory=lambda: f"call_{uuid.uuid4().hex[:12]}")
     type: str = "function"
@@ -20,11 +37,10 @@ class ToolCall(BaseModel):
 
 
 class ToolResult(BaseModel):
-    """工具执行完成后的返回结果，写入消息栈"""
+    """工具执行完之后，返回给 LLM 的结果消息体，直接入 session 消息栈"""
     tool_call_id: str
     content: str
-    # 可选标记：是否终止Agent循环（Pi支持提前退出）
-    terminate: bool = False
+    success: bool = False
 
 
 class Message(BaseModel):
@@ -37,7 +53,7 @@ class Message(BaseModel):
         "extra": "ignore"
     }
 
-    role: str = Field(..., description="system / user / assistant / tool")
+    role: MessageRole = Field(..., description="system / user / assistant / tool")
     content: Optional[str] = Field(default=None, description="文本内容")
     # assistant角色专用：LLM输出的工具调用列表
     tool_calls: Optional[List[ToolCall]] = Field(default=None)
@@ -46,11 +62,11 @@ class Message(BaseModel):
 
     @classmethod
     def new_system_message(cls, content: str) -> "Message":
-        return cls(role="system", content=content)
+        return cls(role=MessageRole.System, content=content)
 
     @classmethod
     def new_user_message(cls, content: str) -> "Message":
-        return cls(role="user", content=content)
+        return cls(role=MessageRole.User, content=content)
 
     @classmethod
     def new_assistant_message(
@@ -58,8 +74,8 @@ class Message(BaseModel):
         content: Optional[str] = None,
         tool_calls: Optional[List[ToolCall]] = None
     ) -> "Message":
-        return cls(role="assistant", content=content, tool_calls=tool_calls)
+        return cls(role=MessageRole.Assistant, content=content, tool_calls=tool_calls)
 
     @classmethod
     def new_tool_message(cls, tool_call_id: str, content: str) -> "Message":
-        return cls(role="tool", tool_call_id=tool_call_id, content=content)
+        return cls(role=MessageRole.Tool, tool_call_id=tool_call_id, content=content)

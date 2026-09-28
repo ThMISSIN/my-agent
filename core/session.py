@@ -5,10 +5,12 @@ from core.types import Message
 
 
 class Session:
-    def __init__(self, session_id: Optional[str] = None):
+    def __init__(self, session_id: Optional[str] = None, system_prompt: Optional[str] = None):
         self.session_id = session_id or str(uuid4())
         # 消息栈，保存完整对话历史
         self.messages: List[Message] = []
+        if system_prompt:
+            self.append_system_message(system_prompt)
 
     def append_user_message(self, content: str) -> None:
         """追加用户消息"""
@@ -16,9 +18,9 @@ class Session:
         self.messages.append(msg)
 
     def append_assistant_message(
-        self,
-        content: Optional[str] = None,
-        tool_calls: Optional[List] = None
+            self,
+            content: Optional[str] = None,
+            tool_calls: Optional[List] = None
     ) -> None:
         """追加assistant消息（文本回答 / 工具调用）"""
         msg = Message.new_assistant_message(content=content, tool_calls=tool_calls)
