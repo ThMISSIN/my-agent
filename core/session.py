@@ -1,7 +1,7 @@
 # core/session.py
 from typing import List, Optional
 from uuid import uuid4
-from core.types import Message
+from core.types import Message, MessageRole
 
 
 class Session:
@@ -12,29 +12,44 @@ class Session:
         if system_prompt:
             self.append_system_message(system_prompt)
 
-    def append_user_message(self, content: str) -> None:
-        """追加用户消息"""
+    def append_user_message(self, content: str) -> Message:
+        """追加用户消息，返回追加的消息"""
         msg = Message.new_user_message(content=content)
         self.messages.append(msg)
+        return msg
 
     def append_assistant_message(
             self,
             content: Optional[str] = None,
             tool_calls: Optional[List] = None
-    ) -> None:
-        """追加assistant消息（文本回答 / 工具调用）"""
+    ) -> Message:
+        """追加assistant消息（文本回答 / 工具调用），返回追加的消息"""
         msg = Message.new_assistant_message(content=content, tool_calls=tool_calls)
         self.messages.append(msg)
+        return msg
 
-    def append_tool_message(self, tool_call_id: str, content: str) -> None:
-        """追加工具返回结果消息"""
+    def append_tool_message(self, tool_call_id: str, content: str) -> Message:
+        """追加工具返回结果消息，返回追加的消息"""
         msg = Message.new_tool_message(tool_call_id=tool_call_id, content=content)
         self.messages.append(msg)
+        return msg
 
-    def append_system_message(self, content: str) -> None:
-        """追加system系统提示词"""
+    def append_system_message(self, content: str) -> Message:
+        """追加system系统提示词，返回追加的消息"""
         msg = Message.new_system_message(content=content)
         self.messages.append(msg)
+        return msg
+
+    def ensure_system_message(self, content: str) -> Optional[Message]:
+        """
+        确保会话有system消息：没有则在栈底插入并返回该消息；已有则不动、返回None。
+        供AgentLoop自动注入系统提示词用，避免重复注入
+        """
+        if any(m.role == MessageRole.System for m in self.messages):
+            return None
+        msg = Message.new_system_message(content=content)
+        self.messages.insert(0, msg)
+        return msg
 
     def clear_messages(self) -> None:
         """清空消息栈，保留session_id"""

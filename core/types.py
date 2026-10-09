@@ -5,24 +5,27 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Union, Literal
 import uuid
 
+
 class MessageRole(StrEnum):
     System = "system"
     User = "user"
     Assistant = "assistant"
     Tool = "tool"
 
+
 class StopReason(StrEnum):
-    Stop = "stop"          # 正常结束（这就是最终答案）
-    ToolUse = "tool_use"   # 模型请求调用工具
-    Length = "length"      # 被输出token上限截断
-    Error = "error"        # 模型侧/网络侧错误
-    Aborted = "aborted"    # 被取消（初期先定义，可不实现触发路径）
+    Stop = "stop"  # 正常结束（这就是最终答案）
+    ToolUse = "tool_use"  # 模型请求调用工具
+    Length = "length"  # 达到输出token上限
+    Error = "error"  # 模型侧/网络侧错误
+    Aborted = "aborted"  # 被取消（初期先定义，可不实现触发路径）
+
 
 class ToolCallFunction(BaseModel):
     """工具调用内的function结构体，LLM 输出的 function 调用信息"""
     name: str
-    # default_factory=dict：每次新建实例都会生成全新空字典，避免共享引用问题
-    arguments: Dict[str, Any] = Field(default_factory=dict)
+    # tool工具所需要的参数
+    arguments: Dict[str, Any] = Field(default_factory=dict)  # default_factory=dict：每次新建实例都会生成全新空字典，避免共享引用问题
 
 
 class ToolCall(BaseModel):
@@ -37,8 +40,10 @@ class ToolCall(BaseModel):
 
 
 class ToolResult(BaseModel):
-    """工具执行完之后，返回给 LLM 的结果消息体，直接入 session 消息栈"""
-    tool_call_id: str
+    """
+    工具的执行结果，由 ToolRegistry 包装成tool消息入栈。
+    tool_call_id不用放这里：Registry执行时用 ToolCall.id 填入消息，工具实现方拿不到也不需要它
+    """
     content: str
     success: bool = False
 
@@ -70,9 +75,9 @@ class Message(BaseModel):
 
     @classmethod
     def new_assistant_message(
-        cls,
-        content: Optional[str] = None,
-        tool_calls: Optional[List[ToolCall]] = None
+            cls,
+            content: Optional[str] = None,
+            tool_calls: Optional[List[ToolCall]] = None
     ) -> "Message":
         return cls(role=MessageRole.Assistant, content=content, tool_calls=tool_calls)
 

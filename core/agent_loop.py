@@ -65,14 +65,23 @@ class AgentLoop:
             llm_client: LLMClient,
             tool_registry: Optional[ToolRegistry] = None,
             max_turns: int = 15,
+            system_prompt: Optional[str] = None,
     ):
         self.llm_client = llm_client
         self.tool_registry = tool_registry
         self.max_turns = max_turns
+        # 系统提示词由AgentLoop接管：不传时默认使用内置SYSTEM_PROMPT，传自定义串则覆盖
+        self.system_prompt = system_prompt if system_prompt is not None else SYSTEM_PROMPT
 
     async def run_loop(self, session: Session, query: str):
         """运行智能体循环"""
         new_messages: List[Message] = [] # 本次运行新增的消息
+        # 会话里没有system消息时自动补上，避免调用方漏配导致裸会话直接跑
+        if self.system_prompt:
+            sys_msg = session.ensure_system_message(self.system_prompt)
+            if sys_msg:
+                new_messages.append(sys_msg)
+        # 将消息添加到会话记录中
         user_msg = session.append_user_message(query)
 
         new_messages.append(user_msg)
@@ -84,9 +93,11 @@ class AgentLoop:
                 tail = session.append_assistant_message(content="已达到最大轮数限制,本次任务终止")
                 new_messages.append(tail)
                 return new_messages
-            # 调用LLM
-            tool_schemas = self.tool_registry.get_all_openai_schemas() if self.tool_registry else None
 
+            # 获取tool列表
+            tool_schemas = self.tool_registry.get_all_tool_schemas() if self.tool_registry else None
+
+            # 调用LLM
             resp_message = await self.llm_client.chat_invoke(
                 session.messages,
                 tool_schemas=tool_schemas,
@@ -115,6 +126,14 @@ class AgentLoop:
                 continue  # 模型看到失败说明后会重新组织调用
 
             # ④ 执行全部工具调用，结果入栈，回到循环顶部让模型消费结果
+            #    保护：没注册任何工具时模型不应返回tool_calls（网关异常/幻觉才会发生），
+            #    统一置失败喂回让模型改走纯文本，而不是对None调方法崩溃；持续幻觉由max_turns兜底
+            if self.tool_registry is None:
+                for tc in resp_message.tool_calls:
+                    fail = session.append_tool_message(tc.id, "工具调用失败：当前Agent未配置任何可用工具")
+                    new_messages.append(fail)
+                continue
+
             tool_msgs = await self.tool_registry.execute_tool_calls(resp_message.tool_calls)
             session.messages.extend(tool_msgs)
             new_messages.extend(tool_msgs)

@@ -26,7 +26,7 @@ class ToolRegistry:
         """根据工具名字获取工具实例，找不到返回None"""
         return self._tools.get(tool_name)
 
-    def get_all_openai_schemas(self) -> List[dict]:
+    def get_all_tool_schemas(self) -> List[dict]:
         """
         获取全部工具的OpenAI schema数组
         在 LLMClient.invoke 的时候，直接把这个传给tools参数
@@ -56,6 +56,7 @@ class ToolRegistry:
                     f"工具调用失败：未注册的工具 '{tc.function.name}'，可用工具：{self.list_tool_names()}"))
                 continue
             try:
+                # 运行工具，传入所需要的参数
                 result = await tool.run(tc.function.arguments)
                 # success=False 时在内容里显式标注失败——OpenAI协议的tool消息没有错误字段，
                 # 模型只能靠内容本身知道"这次失败了"

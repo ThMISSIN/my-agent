@@ -26,6 +26,8 @@ class LLMResponse:
     ):
         self.content = content
         self.tool_calls = tool_calls
+        self.stop_reason = stop_reason
+        self.error_message = error_message
 
 
 class LLMClient:
@@ -125,8 +127,10 @@ class LLMClient:
         req_params = {
             "model": self.model_name,
             "messages": openai_messages,
-            "tools": tool_schemas,
         }
+        # 只在有工具时携带tools字段：显式发"tools": null，部分OpenAI兼容网关会直接400
+        if tool_schemas:
+            req_params["tools"] = tool_schemas
 
         # 2. 调用SDK接口
         try:
@@ -143,13 +147,13 @@ class LLMClient:
         finish = response.choices[0].finish_reason
 
         content = msg_raw.content
-        parsed_tool_calls: Optional[List[ToolCall]] = None
 
         # 如果返回tool_calls，转换成我们自己的ToolCall对象
+        parsed_tool_calls: Optional[List[ToolCall]] = None
         if msg_raw.tool_calls:
             parsed_tool_calls = [self._convert_openai_tool_call(tc) for tc in msg_raw.tool_calls]
 
-        # 4. 映射成框架的StopReason（新增）
+        # 4. 映射成框架的StopReason
         if finish == "length":
             stop_reason = StopReason.Length  # 截断优先：即使带了tool_calls也不执行
         elif parsed_tool_calls:
