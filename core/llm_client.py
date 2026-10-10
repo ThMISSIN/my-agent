@@ -80,14 +80,13 @@ class LLMClient:
 
     def _convert_openai_tool_call(self, raw_tool_call: dict) -> ToolCall:
         """把OpenAI返回原始tool_call字典，转为我们框架的ToolCall对象"""
-        func_dict = raw_tool_call["function"]
         func = ToolCallFunction(
-            name=func_dict["name"],
-            arguments=self._parse_arguments(func_dict["arguments"])
+            name=raw_tool_call.function.name,
+            arguments=self._parse_arguments(raw_tool_call.function.arguments)
         )
         tool_call = ToolCall(
-            id=raw_tool_call["id"],
-            type=raw_tool_call["type"],
+            id=raw_tool_call.id,
+            type=raw_tool_call.type,
             function=func
         )
         return tool_call
